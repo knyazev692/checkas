@@ -342,11 +342,15 @@ class AdminServer:
             data=hostname
         )
 
+        # Получаем текущий статус DND
+        current_dnd = self.client_info[hostname].get('dnd_status', "1")  # По умолчанию зеленый
+        button_color = ft.Colors.RED_500 if current_dnd == "1" else ft.Colors.GREEN_500
+
         # Создаем кнопку для клиента
         client_button = ft.ElevatedButton(
             text=hostname,
             width=200,
-            bgcolor=ft.Colors.BLUE_GREY_700,
+            bgcolor=button_color,
             color=ft.Colors.WHITE,
             data=hostname,
             style=ft.ButtonStyle(
@@ -628,9 +632,24 @@ class AdminServer:
                             'last_activity': time.time()
                         }
 
+                        # Отправляем подтверждение клиенту
+                        try:
+                            main_socket.sendall("CONNECTION_ACCEPTED\n".encode('utf-8'))
+                            print(f"Отправлено подтверждение подключения клиенту {hostname}")
+                        except Exception as e:
+                            print(f"Ошибка при отправке подтверждения клиенту {hostname}: {str(e)}")
+                            return
+
                         # Создаем и добавляем новый клиент в интерфейс
                         if hasattr(self, 'page'):
-                            self.add_client_to_ui(hostname)
+                            print(f"\n=== Начало добавления клиента {hostname} в UI ===")
+                            try:
+                                self.add_client_to_ui(hostname)
+                                print(f"=== Клиент {hostname} успешно добавлен в UI ===\n")
+                            except Exception as e:
+                                print(f"=== Ошибка при добавлении клиента {hostname} в UI: {str(e)} ===\n")
+                                import traceback
+                                print(f"Подробности:\n{traceback.format_exc()}")
 
                         # Запускаем поток обработки клиента
                         client_handler_thread = threading.Thread(
@@ -723,53 +742,60 @@ class AdminServer:
     def add_client_to_ui(self, hostname):
         """Добавляет клиента в интерфейс"""
         try:
-            print(f"Начало добавления клиента {hostname} в UI")
-            
+            print(f"[UI] Шаг 1: Проверка инициализации clients_view")
             if not hasattr(self, 'clients_view') or self.clients_view is None:
-                print(f"Ошибка: clients_view не инициализирован")
+                print(f"[UI] Ошибка: clients_view не инициализирован")
                 return
 
-            # Проверяем, нет ли уже такого клиента в UI
+            print(f"[UI] Шаг 2: Проверка существующего клиента {hostname}")
+            existing_client = None
             for control in self.clients_view.controls[:]:
                 if isinstance(control, ft.Container) and any(
                     isinstance(c, ft.ElevatedButton) and c.data == hostname 
                     for c in control.content.controls
                 ):
-                    print(f"Удаляем существующую строку клиента {hostname}")
-                    self.clients_view.controls.remove(control)
+                    existing_client = control
+                    print(f"[UI] Найден существующий клиент {hostname}")
                     break
 
-            # Создаем новую строку клиента
-            print(f"Создаем новую строку для клиента {hostname}")
+            if existing_client:
+                print(f"[UI] Шаг 3: Удаление существующего клиента {hostname}")
+                self.clients_view.controls.remove(existing_client)
+
+            print(f"[UI] Шаг 4: Создание новой строки для клиента {hostname}")
             client_row = self.create_client_row(hostname)
             if client_row is None:
-                print(f"Не удалось создать строку для клиента {hostname}")
+                print(f"[UI] Ошибка: Не удалось создать строку для клиента {hostname}")
                 return
 
-            # Добавляем строку в список клиентов
-            print(f"Добавляем строку клиента {hostname} в clients_view")
+            print(f"[UI] Шаг 5: Добавление строки клиента {hostname} в clients_view")
             self.clients_view.controls.append(client_row)
             
-            # Обновляем UI
+            print(f"[UI] Шаг 6: Обновление страницы")
             if hasattr(self, 'page'):
-                print(f"Обновляем страницу для клиента {hostname}")
-                self.page.update()
-                print(f"Страница обновлена")
+                try:
+                    self.page.update()
+                    print(f"[UI] Страница успешно обновлена")
+                except Exception as e:
+                    print(f"[UI] Ошибка при обновлении страницы: {str(e)}")
+                    raise
 
-            print(f"Клиент {hostname} успешно добавлен в UI")
-
-            # Даем небольшую задержку перед проверкой DND
+            print(f"[UI] Шаг 7: Запуск отложенной проверки DND")
             def delayed_dnd_check():
-                time.sleep(1)  # Даем время на стабилизацию соединения
-                if hostname in self.clients:  # Проверяем, что клиент все еще подключен
+                time.sleep(1)
+                if hostname in self.clients:
+                    print(f"[UI] Запрос статуса DND для {hostname}")
                     self.check_dnd_status(hostname)
+                else:
+                    print(f"[UI] Клиент {hostname} отключился перед проверкой DND")
 
             threading.Thread(target=delayed_dnd_check, daemon=True).start()
 
         except Exception as e:
-            print(f"Ошибка при добавлении клиента {hostname} в UI: {str(e)}")
+            print(f"[UI] Критическая ошибка при добавлении клиента {hostname} в UI: {str(e)}")
             import traceback
-            print(f"Подробности:\n{traceback.format_exc()}")
+            print(f"[UI] Подробности:\n{traceback.format_exc()}")
+            raise
 
     def remove_client(self, hostname):
         """Удаляет клиента и очищает все связанные ресурсы"""
@@ -959,27 +985,50 @@ class AdminServer:
         try:
             if hostname not in self.client_info:
                 return
-                
-            # Определяем цвет в зависимости от статуса
-            if "Включен" in response:
-                new_color = ft.Colors.RED_500
-            elif "Выключен" in response:
-                new_color = ft.Colors.GREEN_500
-            else:
-                new_color = ft.Colors.GREY_500
 
-            # Обновляем цвет кнопки
-            if 'button' in self.client_info[hostname]:
+            # Получаем новое значение из ответа (0 или 1)
+            try:
+                # Проверяем формат ответа
+                if ':' in response:
+                    # Если есть префикс dnd_status:
+                    new_value = response.split(':')[1].strip()
+                else:
+                    # Если просто значение
+                    new_value = response.strip()
+                
+                # Нормализуем значение
+                new_value = "1" if new_value == "1" else "0"
+                
+                print(f"[DND] Получен статус от {hostname}: {new_value}")
+            except Exception as e:
+                print(f"[DND] Некорректный формат ответа от {hostname}: {response}")
+                print(f"[DND] Ошибка обработки: {str(e)}")
+                return
+
+            # Получаем текущее значение
+            current_value = self.client_info[hostname].get('dnd_status', None)
+
+            # Если значение изменилось, обновляем кнопку
+            if current_value != new_value and 'button' in self.client_info[hostname]:
+                print(f"[DND] {hostname}: значение изменилось {current_value} -> {new_value}")
+                
+                # Сохраняем новое значение
+                self.client_info[hostname]['dnd_status'] = new_value
+                
+                # Обновляем цвет кнопки в зависимости от значения
                 button = self.client_info[hostname]['button']
-                button.bgcolor = new_color
+                button.bgcolor = ft.Colors.RED_500 if new_value == "1" else ft.Colors.GREEN_500
                 button.color = ft.Colors.WHITE
                 
-                # Обновляем UI если страница доступна
+                # Обновляем UI
                 if hasattr(self, 'page'):
                     self.page.update()
-                
+            else:
+                print(f"[DND] {hostname}: значение не изменилось ({new_value})")
+
         except Exception as e:
-            print(f"Ошибка при обработке статуса DND для {hostname}: {str(e)}")
+            print(f"[DND] Ошибка при обработке статуса DND для {hostname}: {str(e)}")
+            print(f"[DND] Ответ: {response}")
 
 if __name__ == "__main__":
     # Запускаем сервер на всех интерфейсах, чтобы он был доступен в локальной сети

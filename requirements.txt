@@ -1,3 +1,7 @@
 pyinstaller==6.5.0
 pywin32==306
-setuptools>=65.5.1 
+setuptools>=65.5.1
+flet>=0.21.1
+win10toast>=0.9
+requests>=2.31.0
+packaging>=23.2 

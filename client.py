@@ -8,44 +8,16 @@ import subprocess
 import platform
 import ctypes
 import logging
-import winreg
 from datetime import datetime
-
-# Функция для добавления в автозапуск
-def add_to_startup():
-    try:
-        # Получаем путь к исполняемому файлу
-        exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
-        
-        # Если это не exe файл, пропускаем
-        if not exe_path.endswith('.exe'):
-            return
-            
-        # Путь в реестре для автозапуска
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        
-        try:
-            # Открываем ключ реестра
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, 
-                               winreg.KEY_READ | winreg.KEY_WRITE)
-        except WindowsError:
-            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
-            
-        # Проверяем, есть ли уже запись
-        try:
-            existing_path = winreg.QueryValueEx(key, "MicroSip")[0]
-            if existing_path == exe_path:
-                winreg.CloseKey(key)
-                return
-        except WindowsError:
-            pass
-            
-        # Добавляем программу в автозапуск
-        winreg.SetValueEx(key, "MicroSip", 0, winreg.REG_SZ, exe_path)
-        winreg.CloseKey(key)
-        logging.info("Программа добавлена в автозапуск")
-    except Exception as e:
-        logging.error(f"Ошибка при добавлении в автозапуск: {str(e)}")
+import json
+import requests
+import tempfile
+from pathlib import Path
+import win32gui
+import win32con
+import win32api
+from win10toast import Win10Toast
+from packaging import version
 
 # Настройка логирования
 logging.basicConfig(
@@ -64,11 +36,95 @@ BUFFER_SIZE = 1024
 RECONNECT_DELAY = 5  # Задержка перед повторным подключением
 MAX_RECONNECT_ATTEMPTS = 3  # Максимальное количество попыток переподключения
 
+# Константы для обновлений
+GITHUB_REPO = "knyazev692/checkaso"  # Замените на ваш репозиторий
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+VERSION = "1.0.0"  # Текущая версия клиента
+UPDATE_CHECK_INTERVAL = 3600  # Проверка обновлений каждый час
+
+class NotificationManager:
+    def __init__(self):
+        self.toaster = Win10Toast()
+        
+    def show_notification(self, title, message, duration=5):
+        """Показывает уведомление в правом нижнем углу экрана"""
+        try:
+            self.toaster.show_toast(
+                title,
+                message,
+                icon_path=None,  # Можно добавить путь к иконке
+                duration=duration,
+                threaded=True  # Не блокирует выполнение программы
+            )
+        except Exception as e:
+            logging.error(f"Ошибка при показе уведомления: {e}")
+
+class UpdateManager:
+    def __init__(self, notification_manager):
+        self.notification_manager = notification_manager
+        
+    def check_for_updates(self):
+        """Проверяет наличие обновлений"""
+        try:
+            response = requests.get(GITHUB_API_URL)
+            if response.status_code == 200:
+                latest_release = response.json()
+                latest_version = latest_release['tag_name'].lstrip('v')
+                
+                if version.parse(latest_version) > version.parse(VERSION):
+                    self.notification_manager.show_notification(
+                        "Доступно обновление",
+                        f"Обновление до версии {latest_version}"
+                    )
+                    self.download_and_install_update(latest_release['assets'][0]['browser_download_url'])
+                    return True
+            return False
+        except Exception as e:
+            logging.error(f"Ошибка при проверке обновлений: {e}")
+            return False
+
+    def download_and_install_update(self, download_url):
+        """Загружает и устанавливает обновление"""
+        try:
+            # Создаем временную директорию
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Загружаем новую версию
+                response = requests.get(download_url, stream=True)
+                update_file = os.path.join(temp_dir, "update.exe")
+                
+                with open(update_file, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+
+                # Создаем батник для обновления
+                update_script = os.path.join(temp_dir, "update.bat")
+                current_exe = sys.executable
+                with open(update_script, 'w') as f:
+                    f.write(f'''@echo off
+timeout /t 2 /nobreak
+copy /Y "{update_file}" "{current_exe}"
+start "" "{current_exe}"
+del "%~f0"
+''')
+
+                # Запускаем скрипт обновления
+                subprocess.Popen(['cmd', '/c', update_script], 
+                               creationflags=subprocess.CREATE_NO_WINDOW,
+                               cwd=temp_dir)
+                
+                # Завершаем текущий процесс
+                sys.exit(0)
+
+        except Exception as e:
+            logging.error(f"Ошибка при установке обновления: {e}")
+            self.notification_manager.show_notification(
+                "Ошибка обновления",
+                "Не удалось установить обновление"
+            )
+
 class MicrosipClient:
     def __init__(self):
-        # Добавляем в автозапуск при первом запуске
-        add_to_startup()
-        
         self.hostname = self.get_hostname()
         self.server_address = None
         self.main_socket = None
@@ -78,10 +134,16 @@ class MicrosipClient:
         self.reconnect_attempts = 0
         self.last_server_response = time.time()
         self.discovery_active = True  # Флаг активности поиска
+        self.notification_manager = NotificationManager()
+        self.update_manager = UpdateManager(self.notification_manager)
         
         # Запускаем поиск сервера
         self.discovery_thread = threading.Thread(target=self.discover_server, daemon=True)
         self.discovery_thread.start()
+        
+        # Запускаем поток проверки обновлений
+        self.update_thread = threading.Thread(target=self.check_updates_periodically, daemon=True)
+        self.update_thread.start()
         
         logging.info(f"Клиент инициализирован (hostname: {self.hostname})")
 
@@ -471,15 +533,25 @@ class MicrosipClient:
                 time.sleep(2)
 
     def display_message(self, message):
-        """Отображение сообщения пользователю"""
+        """Отображает сообщение в виде уведомления"""
         try:
-            if platform.system() == "Windows":
-                ctypes.windll.user32.MessageBoxW(0, message, "Сообщение от администратора", 0x40)
-            else:
-                # Для других ОС можно использовать другие способы отображения
-                logging.info(f"Сообщение: {message}")
+            self.notification_manager.show_notification(
+                "Сообщение от сервера",
+                message
+            )
+            return "message_displayed"
         except Exception as e:
             logging.error(f"Ошибка при отображении сообщения: {e}")
+            return "error_displaying_message"
+
+    def check_updates_periodically(self):
+        """Периодически проверяет наличие обновлений"""
+        while self.running:
+            try:
+                self.update_manager.check_for_updates()
+            except Exception as e:
+                logging.error(f"Ошибка при проверке обновлений: {e}")
+            time.sleep(UPDATE_CHECK_INTERVAL)
 
     def run(self):
         """Запуск клиента"""
