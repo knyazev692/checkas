@@ -38,9 +38,9 @@ RECONNECT_DELAY = 5  # Задержка перед повторным подкл
 MAX_RECONNECT_ATTEMPTS = 3  # Максимальное количество попыток переподключения
 
 # Константы для обновлений
-GITHUB_REPO = "knyazev692/checkaso"  # Замените на ваш репозиторий
+GITHUB_REPO = "knyazev692/checkas"  # Замените на ваш репозиторий
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-VERSION = "1.0.0"  # Текущая версия клиента
+VERSION = "1.0.1"  # Текущая версия клиента
 UPDATE_CHECK_INTERVAL = 3600  # Проверка обновлений каждый час
 
 class NotificationManager:

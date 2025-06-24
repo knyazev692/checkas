@@ -168,3 +168,37 @@ github_token.txt
 # Additional changes from the code block
 .idea/
 .vscode/
+
+# Файлы сборки
+build_*.py
+*.spec
+
+# Папки сборки и кэша Python
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.egg-info/
+
+# Логи и временные файлы
+*.log
+*.tmp
+
+# Токены и секреты
+github_token.txt
+
+# Виртуальное окружение
+venv/
+env/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Windows
+Thumbs.db
+desktop.ini
