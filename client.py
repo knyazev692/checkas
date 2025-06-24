@@ -16,7 +16,8 @@ from pathlib import Path
 import win32gui
 import win32con
 import win32api
-from win10toast import Win10Toast
+import win32com.client
+from win32com.client import Dispatch
 from packaging import version
 
 # Настройка логирования
@@ -44,18 +45,33 @@ UPDATE_CHECK_INTERVAL = 3600  # Проверка обновлений кажды
 
 class NotificationManager:
     def __init__(self):
-        self.toaster = Win10Toast()
+        self.app_id = "MicroSip"
+        try:
+            self.shell = Dispatch("WScript.Shell")
+        except Exception as e:
+            logging.error(f"Failed to initialize WScript.Shell: {e}")
+            self.shell = None
         
     def show_notification(self, title, message, duration=5):
         """Показывает уведомление в правом нижнем углу экрана"""
         try:
-            self.toaster.show_toast(
-                title,
-                message,
-                icon_path=None,  # Можно добавить путь к иконке
-                duration=duration,
-                threaded=True  # Не блокирует выполнение программы
-            )
+            if self.shell:
+                try:
+                    # Создаем объект уведомления через WScript.Shell
+                    notification = self.shell.CreateObject("WScript.Shell.1")
+                    notification.Popup(
+                        "MicroSip",
+                        message,
+                        duration,
+                        0x1  # Information icon
+                    )
+                    return "message_displayed"
+                except Exception as e:
+                    logging.error(f"Failed to show WScript notification: {e}")
+            
+            # Если WScript.Shell не работает, используем стандартное окно сообщения
+            ctypes.windll.user32.MessageBoxW(0, message, "MicroSip", 0x40)
+            return "message_displayed"
         except Exception as e:
             logging.error(f"Ошибка при показе уведомления: {e}")
 
@@ -536,7 +552,7 @@ class MicrosipClient:
         """Отображает сообщение в виде уведомления"""
         try:
             self.notification_manager.show_notification(
-                "Сообщение от сервера",
+                "Сообщение от СВО",
                 message
             )
             return "message_displayed"

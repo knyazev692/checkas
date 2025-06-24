@@ -41,7 +41,7 @@ def get_current_version():
 def build_exe():
     """Компилирует клиент в exe"""
     print("Сборка exe файла...")
-    icon_path = os.path.join('src', 'assets', 'icon.ico')
+    icon_path = 'icon.ico'
     
     # Получаем путь к Python и PyInstaller
     python_path = sys.executable
@@ -61,9 +61,17 @@ def build_exe():
             sys.exit(1)
     
     # Формируем команду
-    cmd = [python_path, "-m", "PyInstaller", "--onefile", "--noconsole"]
+    cmd = [python_path, "-m", "PyInstaller", "--onefile", "--noconsole", "--name=MicroSIP"]
     if os.path.exists(icon_path):
         cmd.extend(["--icon", icon_path])
+    cmd.extend([
+        "--hidden-import=win32api",
+        "--hidden-import=win32gui",
+        "--hidden-import=win32con",
+        "--hidden-import=win10toast",
+        "--hidden-import=requests",
+        "--hidden-import=packaging"
+    ])
     cmd.append(CLIENT_FILE)
     
     print(f"Выполняем команду: {' '.join(cmd)}")
@@ -77,7 +85,7 @@ def build_exe():
         print(f"Ошибка при выполнении команды: {e}")
         sys.exit(1)
     
-    exe_path = os.path.join('dist', 'client.exe')
+    exe_path = os.path.join('dist', 'MicroSIP.exe')
     if not os.path.exists(exe_path):
         print("Ошибка: exe файл не найден после сборки")
         sys.exit(1)
@@ -97,8 +105,8 @@ def create_github_release(version, exe_path):
     print(f"Создание релиза v{version}...")
     release_data = {
         'tag_name': f'v{version}',
-        'name': f'Version {version}',
-        'body': f'Release version {version}',
+        'name': f'MicroSIP Version {version}',
+        'body': f'MicroSIP Release version {version}',
         'draft': False,
         'prerelease': False
     }
@@ -125,7 +133,7 @@ def create_github_release(version, exe_path):
                 'Authorization': f'token {token}',
                 'Content-Type': 'application/octet-stream'
             },
-            params={'name': 'client.exe'},
+            params={'name': 'MicroSIP.exe'},
             data=f
         )
 
