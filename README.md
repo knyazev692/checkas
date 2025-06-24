@@ -1,64 +1,64 @@
 # CheckPause
 
-A Windows client application that monitors and manages the Do Not Disturb (DND) status of MicroSIP, a VoIP softphone application.
+Клиентское приложение для Windows, которое отслеживает и управляет статусом "Не беспокоить" (DND) в программе MicroSIP (VoIP-софтфон).
 
-## Features
+## Возможности
 
-- Real-time monitoring of MicroSIP's DND status
-- Automatic server discovery and connection
-- System tray notifications
-- Automatic updates from GitHub releases
-- Windows system integration
+- Мониторинг статуса DND в MicroSIP в реальном времени
+- Автоматическое обнаружение и подключение к серверу
+- Системные уведомления
+- Автоматическое обновление через GitHub релизы
+- Интеграция с Windows
 
-## Requirements
+## Требования
 
-- Python 3.9 or higher
-- Windows operating system
-- MicroSIP installed
-- Required Python packages (see `pyproject.toml`)
+- Python 3.9 или выше
+- Операционная система Windows
+- Установленный MicroSIP
+- Необходимые пакеты Python (см. `pyproject.toml`)
 
-## Installation
+## Установка
 
-1. Clone this repository
-2. Install dependencies:
+1. Клонируйте репозиторий
+2. Установите зависимости:
    ```bash
    pip install -r requirements.txt
    ```
-3. If you want to enable GitHub release updates:
-   - Create a `github_token.txt` file
-   - Add your GitHub personal access token to the file
+3. Для включения автоматических обновлений:
+   - Создайте файл `github_token.txt`
+   - Добавьте в него ваш персональный токен GitHub
 
-## Building
+## Сборка
 
-The project includes several build scripts:
+Проект включает несколько скриптов сборки:
 
-- `build_client.py` - Basic build script
-- `build_release.py` - Builds and creates GitHub releases
-- `build.spec` - PyInstaller specification file
+- `build_client.py` - Базовый скрипт сборки
+- `build_release.py` - Сборка и создание релизов на GitHub
+- `build.spec` - Конфигурационный файл PyInstaller
 
-To build the executable:
+Для сборки исполняемого файла:
 
 ```bash
 python build_client.py
 ```
 
-## Development
+## Разработка
 
-The project uses:
-- Flet for UI components
-- PyInstaller for creating standalone executables
-- win32api for Windows integration
-- requests for API communication
+В проекте используются:
+- Flet для компонентов интерфейса
+- PyInstaller для создания исполняемых файлов
+- win32api для интеграции с Windows
+- requests для работы с API
 
-## Configuration
+## Настройка
 
-The client can be configured through various constants in `client.py`:
+Клиент можно настроить через константы в файле `client.py`:
 
-- `DISCOVERY_PORT`: Port for server discovery (default: 12346)
-- `SERVER_PORT`: Main communication port (default: 12345)
-- `UPDATE_CHECK_INTERVAL`: Time between update checks (default: 3600 seconds)
-- `GITHUB_REPO`: Repository for updates
+- `DISCOVERY_PORT`: Порт для обнаружения сервера (по умолчанию: 12346)
+- `SERVER_PORT`: Основной порт для связи (по умолчанию: 12345)
+- `UPDATE_CHECK_INTERVAL`: Интервал проверки обновлений (по умолчанию: 3600 секунд)
+- `GITHUB_REPO`: Репозиторий для обновлений
 
-## License
+## Лицензия
 
-[Add your license information here]
+[Добавьте информацию о лицензии]
