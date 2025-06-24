@@ -41,6 +41,6 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='NONE',
-    version='1.0.0',
+    version='1.3.0',
     uac_admin=False,
 ) 
